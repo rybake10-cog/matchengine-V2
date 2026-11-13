@@ -2,8 +2,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import motor.motor_asyncio
+from urllib.parse import quote_plus
+
+import pymongo
 import pymongo.database
+from pymongo import AsyncMongoClient
+from pymongo.asynchronous.database import AsyncDatabase
 
 from matchengine.internals.plugin_helpers.plugin_stub import DBSecrets
 from matchengine.internals.typing.matchengine_types import Secrets
@@ -45,15 +49,17 @@ class DefaultDBSecrets(DBSecrets):
                        rw_password=self._secrets.get("MONGO_PASSWORD", False),
                        replica_set=self._secrets.get("MONGO_REPLICASET", False),
                        max_pool_size=self._secrets.get("MONGO_MAX_POOL_SIZE", False, ),
-                       min_pool_size=self._secrets.get("MONGO_MIN_POOL_SIZE", False))
+                       min_pool_size=self._secrets.get("MONGO_MIN_POOL_SIZE", False),
+                       tls=self._secrets.get("MONGO_TLS", False),
+                       retry_writes=self._secrets.get("MONGO_RETRY_WRITES", None))
 
 
 class MongoDBConnection(object):
     uri = ""
     read_only: bool
     secrets: Secrets
-    db: Union[pymongo.database.Database, motor.motor_asyncio.AsyncIOMotorDatabase]
-    client: Union[pymongo.MongoClient, motor.motor_asyncio.AsyncIOMotorClient]
+    db: Union[pymongo.database.Database, AsyncDatabase]
+    client: Union[pymongo.MongoClient, AsyncMongoClient]
 
     def __init__(self, read_only=True, db=None, async_init=True):
         """
@@ -82,18 +88,27 @@ class MongoDBConnection(object):
             uri_params.append(f"maxPoolSize={self.secrets.MAX_POOL_SIZE}")
         if self.secrets.MIN_POOL_SIZE:
             uri_params.append(f"minPoolSize={self.secrets.MIN_POOL_SIZE}")
-        username_password_param = (f"{username if username else str()}"
+        if getattr(self.secrets, "TLS", False):
+            uri_params.append("tls=true")
+        if getattr(self.secrets, "RETRY_WRITES", None) is not None:
+            uri_params.append(f"retryWrites={str(self.secrets.RETRY_WRITES).lower()}")
+        username_password_param = (f"{quote_plus(username) if username else str()}"
                                    f"{':' if username and password else str()}"
-                                   f"{password if password else str()}"
+                                   f"{quote_plus(password) if password else str()}"
                                    f"{'@' if username or password else str()}")
 
-        uri = (f"mongodb://{username_password_param}{self.secrets.HOST}:{self.secrets.PORT}/{self.db}"
-               f"{'?' if uri_params else str()}{'&'.join(uri_params)}")
+        self.uri = (f"mongodb://{username_password_param}{self.secrets.HOST}:{self.secrets.PORT}/{self.db}"
+                    f"{'?' if uri_params else str()}{'&'.join(uri_params)}")
         if self.async_init:
-            self.client = motor.motor_asyncio.AsyncIOMotorClient(uri)
+            self.client = AsyncMongoClient(self.uri)
         else:
-            self.client = pymongo.MongoClient(uri)
+            self.client = pymongo.MongoClient(self.uri)
         return self.client[self.db]
 
     def __exit__(self, exception_type, exception_value, exception_traceback):
+        if self.async_init:
+            raise TypeError("Async connections must be closed with 'await connection.aclose()'")
         self.client.close()
+
+    async def aclose(self):
+        await self.client.close()

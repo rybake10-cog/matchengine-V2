@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from argparse import Namespace
 from collections import defaultdict
 from unittest import TestCase
@@ -88,7 +89,8 @@ class IntegrationTestMatchengineLoading(TestCase):
                          trial='matchengine/tests/data/integration_trials/',
                          upsert_fields='')
         load(args)
-        assert len(list(self.db_ro.trial.find({}))) == 16
+        trial_files = [f for f in os.listdir('matchengine/tests/data/integration_trials/') if f.endswith('.json')]
+        assert len(list(self.db_ro.trial.find({}))) == len(trial_files)
 
     def test__load_trial_single_yaml(self):
         self._reset(do_reset_trials=True)

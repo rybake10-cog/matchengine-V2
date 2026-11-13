@@ -468,7 +468,8 @@ class Secrets(object):
         "HOST", "PORT", "DB",
         "AUTH_DB", "RO_USERNAME", "RO_PASSWORD",
         "RW_USERNAME", "RW_PASSWORD", "REPLICA_SET",
-        "MAX_POOL_SIZE", "MIN_POOL_SIZE"
+        "MAX_POOL_SIZE", "MIN_POOL_SIZE",
+        "TLS", "RETRY_WRITES"
     )
 
     def __init__(
@@ -483,8 +484,12 @@ class Secrets(object):
             rw_password: str,
             replica_set: str,
             max_pool_size: str,
-            min_pool_size: str
+            min_pool_size: str,
+            tls: bool = False,
+            retry_writes: bool = None
     ):
+        self.TLS = tls
+        self.RETRY_WRITES = retry_writes
         self.MIN_POOL_SIZE = min_pool_size
         self.MAX_POOL_SIZE = max_pool_size
         self.REPLICA_SET = replica_set
