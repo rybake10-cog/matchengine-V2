@@ -19,13 +19,12 @@ setup(
     },
     install_requires=[
         "python-dateutil>=2.8.0",
-        "PyYAML>=5.1",
-        "pymongo>=3.8.0,<4",
-        "networkx>=2.3",
-        "motor==2.0.0"
+        "PyYAML>=6.0",
+        "pymongo>=4.13,<5",
+        "networkx>=3.2"
     ],
     include_package_data=True,
-    python_requires='>=3.7',
+    python_requires='>=3.10',
     download_url='https://github.com/dfci/matchengine-V2/archive/2.0.0.tar.gz',
     classifiers=[
         "Environment :: Console",
@@ -36,7 +35,10 @@ setup(
         "Operating System :: POSIX :: Linux",
         "Operating System :: POSIX :: BSD",
         "Operating System :: Unix",
-        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
         "Programming Language :: Python :: 3 :: Only",
         "Topic :: Scientific/Engineering",
         "Topic :: Scientific/Engineering :: Bio-Informatics",

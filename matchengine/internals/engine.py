@@ -109,12 +109,15 @@ class MatchEngine(object):
         """
         Teardown database connections (async + synchronous) and async workers gracefully.
         """
-        if self.db_init:
-            self._async_db_ro.__exit__(exception_type, exception_value, exception_traceback)
-            self._async_db_rw.__exit__(exception_type, exception_value, exception_traceback)
-            self._db_ro.__exit__(exception_type, exception_value, exception_traceback)
         if not self.loop.is_closed():
             self._loop.run_until_complete(self._async_exit())
+        if self.db_init:
+            if not self.loop.is_closed():
+                self._loop.run_until_complete(self._async_db_ro.aclose())
+                self._loop.run_until_complete(self._async_db_rw.aclose())
+            self._db_ro.__exit__(exception_type, exception_value, exception_traceback)
+            self._db_rw.__exit__(exception_type, exception_value, exception_traceback)
+        if not self.loop.is_closed():
             self._loop.stop()
             self._loop.close()
 
@@ -251,14 +254,9 @@ class MatchEngine(object):
             self.sample_ids = list(self.clinical_mapping.values())
 
         # instantiate a new async event loop to allow class to be used as if it is synchronous
-        try:
-            if asyncio.get_event_loop().is_closed() or not hasattr(self, '_loop'):
-                asyncio.set_event_loop(asyncio.new_event_loop())
-            self._loop = asyncio.get_event_loop()
-        except RuntimeError as e:
-            logging.error(e)
+        if getattr(self, '_loop', None) is None or self._loop.is_closed():
             self._loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(self._loop)
+        asyncio.set_event_loop(self._loop)
 
         self._loop.run_until_complete(self._async_init(db_name))
 
@@ -967,7 +965,7 @@ class MatchEngine(object):
         if protocol_nos is None and sample_ids is None:
             self.db_rw.get_collection(self.trial_match_collection).drop()
         else:
-            self.db_rw.get_collection(self.trial_match_collection).remove(drop_query)
+            self.db_rw.get_collection(self.trial_match_collection).delete_many(drop_query)
 
     @property
     def trials_to_match_on(self):

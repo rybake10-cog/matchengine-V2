@@ -3,16 +3,16 @@ node {
         checkout scm
 
         //parent wrapper image
-        docker.image('mongo:3.6.10').withRun('-e "MONGO_INITDB_ROOT_USERNAME=root" -e "MONGO_INITDB_ROOT_PASSWORD=password"') { c ->
+        docker.image('mongo:7.0').withRun('-e "MONGO_INITDB_ROOT_USERNAME=root" -e "MONGO_INITDB_ROOT_PASSWORD=password"') { c ->
 
             stage("spin up db") {
                 //get access to mongoshell methods
-                docker.image('mongo:3.6.10').inside("--link ${c.id}") {
+                docker.image('mongo:7.0').inside("--link ${c.id}") {
 
                     sh "env"
 
                     //wait until mongodb is initialized
-                    sh "bash -c 'COUNTER=0 && until mongo mongodb://root:password@${c.id}:27017/integration?authSource=admin --eval \"print(\\\"waited for connection\\\")\"; do sleep 1; let \"COUNTER++\"; echo \$COUNTER; if [ \$COUNTER -eq 15 ]; then exit 1 ; fi; done'"
+                    sh "bash -c 'COUNTER=0 && until mongosh --quiet mongodb://root:password@${c.id}:27017/integration?authSource=admin --eval \"print(\\\"waited for connection\\\")\"; do sleep 1; let \"COUNTER++\"; echo \$COUNTER; if [ \$COUNTER -eq 15 ]; then exit 1 ; fi; done'"
 
                     sh "echo loading test data..."
 
@@ -24,7 +24,7 @@ node {
 
             //use api test image
             stage("run tests") {
-                docker.image('python:3.7').inside("--link ${c.id}") {
+                docker.image('python:3.12').inside("--link ${c.id}") {
                     sh """
                        cat << 'EOF' > SECRETS_JSON.json
 {
@@ -42,16 +42,13 @@ node {
 
                     sh "cat SECRETS_JSON.json"
 
-                    sh 'apt-get update && apt-get install -y libgraphviz-dev graphviz'
-
                     sh """
-                       python setup.py install && \
-                       pip install pygraphviz nose matplotlib && \
+                       pip install . pytest && \
                        export SECRETS_JSON=SECRETS_JSON.json && \
-                       nosetests -v --with-xunit matchengine/tests
+                       python -m pytest -v --junitxml=pytest.xml matchengine/tests
                        """
 
-                    //report on nosetests results
+                    //report on test results
                     sh "ls *xml"
                     junit "*xml"
                 }

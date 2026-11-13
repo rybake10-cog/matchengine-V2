@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    services:
+      mongo:
+        image: mongo:7.0
+        env:
+          MONGO_INITDB_ROOT_USERNAME: root
+          MONGO_INITDB_ROOT_PASSWORD: password
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet -u root -p password --eval 'db.runCommand({ping: 1})'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      SECRETS_JSON: '{"MONGO_HOST": "localhost", "MONGO_PORT": 27017, "MONGO_USERNAME": "root", "MONGO_PASSWORD": "password", "MONGO_RO_USERNAME": "root", "MONGO_RO_PASSWORD": "password", "MONGO_DBNAME": "integration", "MONGO_AUTH_SOURCE": "admin"}'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: setup.py
+
+      - name: Load integration test data
+        run: |
+          docker run --rm --network host -v "$PWD/matchengine/tests/data/integration_data:/dump:ro" mongo:7.0 \
+            mongorestore --uri "mongodb://root:password@localhost:27017/?authSource=admin" \
+            --db integration --gzip --dir /dump
+
+      - name: Install
+        run: pip install . pytest
+
+      - name: Test
+        run: python -m pytest -v --junitxml=pytest-${{ matrix.python-version }}.xml matchengine/tests
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.python-version }}
+          path: pytest-${{ matrix.python-version }}.xml
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t matchengine:ci .
+      - name: Smoke test
+        run: docker run --rm matchengine:ci --help
